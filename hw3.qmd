@@ -1,0 +1,192 @@
+---
+title: "A Title About Programming III: Revenge of the Lists"
+format: html
+editor: visual
+---
+
+## Conceptual Questions
+
+1.  To get to myfolder/mydata.csv from myfolder/homework/, you need to specify the path "../mydata.csv" in a function like read.csv("../mydata.csv").
+
+2.  R is free. R projects allows you to keep all of your code and associated files in one place. I can also use version control and push the R project to things like GIT. Additionally, each R Project has its own work space, so conflicting libraries across projects isn't an issue.
+
+3.  Git is a version control system which allows multiple users to work on large projects simultaneously. All changes are made locally, and then the changes are pushed to a new version. Previous versions are retained so that any catastrophic errors (ala, the Team Fortress 2 bug where the game doesn't load without a seemingly inconsequential .jpg), can be corrected, or at least the project can be restored to a version without the error present. Github is a domain where Git can be practiced. Github also allows the user to host content publicly or privately, and to apply licenses.
+
+4.  Tibbles do not allow arithmetic operations on its columns. The result is coerced into a data frame. Additionally, subsetting a tibble always returns another tibble, while a subset data frame may result in a data frame or vector.
+
+5.  For this part I will run the code given in the homework to get its intended output, then use the chains to duplicate it. For the test, if given such a question, I will specify what I assume the output will make before I attempt to duplicate that.
+
+```{r}
+library(dplyr)
+library(readxl)
+library(readr)
+arrange(filter(select(as_tibble(iris), starts_with("Petal"), Species), Petal.Length <
+1.55), Species)
+```
+
+Our goal is a 37x3 tibble. No problem. We want to keep species, petal width, and petal length, as well as ensuring the petal length is less than 1.55. Here goes.
+
+```{r}
+iris %>% select(starts_with("Petal"), Species) %>% filter(Petal.Length<1.55) %>% as_tibble()
+```
+
+6.  Long format data means that any variables are given a "generic" title and are specified by row. For example, if an experiment had four treatments, I would have a "treatment" variable with the rows specifying which treatment it is (treatment 1, 2, 3, or 4). If the data is wide formatted, each treatment would have its own variable. Since long format is preferable for statistical analysis, sanity, world peace, and the salvation of the galaxy, we can assume by Murphy's Law that any data provided by a vendor is wide formatted.
+
+## Reading in Delimited Data
+
+**Glass Data**
+
+This is comma delimited (I clicked on it) so here goes nothing.
+
+```{r}
+glass<- read.csv(url("https://www4.stat.ncsu.edu/~online/datasets/glass.data"), header = F)
+names(glass)<- c("ID","RI","Na","Mg","Al","Si","K","Ca","Ba","Fe","Type_of_Glass")
+glass
+```
+
+Next we're going to make a chain which takes the type of glass variable and makes it useful, (by assigning what the numbers mean) and then by restricting Iron to less than 0.2 and restricting the type of glass to either tableware or headlamp.
+
+```{r}
+glass %>% mutate(Type_of_Glass = factor(Type_of_Glass,levels = c(1,2,3,4,5,6,7),
+                                        labels = c(" building_windows_float_processed", "build-
+ing_windows_non_float_processed", "vehicle_windows_float_processed", "vehicle_windows_non_float_processed", "containers","tableware","headlamps"))) %>%
+  filter(Fe<0.2) %>% filter(Type_of_Glass == "tableware" | Type_of_Glass == "headlamps")
+```
+
+**Yeast**
+
+Let's go ahead and read this into R, assign the names to the columns, then print it out. This looks space delimited. Which is better than pipe delimited. (This joke is brought to you by NCDETECT.)
+
+```{r}
+yeast<- read.delim2(url("https://www4.stat.ncsu.edu/~online/datasets/yeast.data"), sep = "", header = F)
+names(yeast)<- c("seq_name","mcg","gvh","alm","mit","erl","pox","vac","nuc","class")
+yeast
+```
+
+Next we're going to use chains to get rid of the Seq_name column and the nuc column, and then add columns which correspond to the mean and median of each column by class using across().
+
+```{r}
+yeast %>% select(-c(seq_name, nuc)) %>% mutate_at(c("mcg","gvh","alm","mit","erl","pox","vac"), as.numeric)%>%
+  mutate(
+  across(
+    .cols = -c(class),
+    .fns = c(mean,median),
+    .names = "{.col}_{.fn}"
+  )
+)
+```
+
+**Excel and Delimited Data**
+
+Let's read in the white wine data. First sheet only.
+
+```{r}
+white_wine<- read_excel("C:/Users/James P/Downloads/white-wine.xlsx", sheet = "white-wine")
+white_wine
+```
+
+We're now going to replace the column names using the data from the second sheet. I'm then going to add a column which simply says "white" at the end of the data.
+
+```{r}
+varnames<- read_excel("C:/Users/James P/Downloads/white-wine.xlsx", sheet = "variables")
+colnames(white_wine)<- varnames$Variables
+white_wine$color<- "White"
+```
+
+There is a semi-colon delimited .csv of red wine. A... semi-colon .csv...If I were insane enough to open this in a text editor would each operation really be separated by ",;" ? It's okay, this is what readr is for... I'm just glad this isn't a data step in SAS.
+
+Anyway, once I read in that file, I'm going to replace the variable names, (which thankfully I already have from the excel sheet), and add a column to denote the wines are red.
+
+```{r}
+red_wine<- read_delim("C:/Users/James P/Downloads/red-wine.csv", delim = ";", show_col_types = F)
+colnames(red_wine)<- varnames$Variables
+red_wine$color<- "red"
+```
+
+And now we make forge the one data set... one tibble to rule them all... the WINE data set
+
+```{r}
+wine<- bind_rows(list(white_wine,red_wine))
+wine
+```
+
+Now we're going to filter wines with quality \> 6.5, and alcohol less than 132. The homework specifies this as "reasonable" although "reasonable" is probably context dependent. Then we're going to chain to sort from highest to lowest quality, select variables that contain "acid" and three others, and add the mean and sd of alcohol content.
+
+```{r}
+wine %>% filter(quality>6.5) %>% filter(alcohol<132) %>% arrange(desc(quality)) %>% select(c(fixed_acidity,volatile_acidity,citric_acid, alcohol, color, quality)) %>%
+  mutate(
+    across(
+      .cols = c(alcohol),
+      .fns = c(mean,sd),
+      .names = "{.col}_{.fn}"
+    )
+  )
+```
+
+**Database Practice**
+
+First we need to connect to the lahman database.
+
+```{r}
+library(DBI)
+con <- dbConnect(RSQLite::SQLite(), "C:/Users/James P/Downloads/lahman.db")
+dbListTables(con)
+```
+
+Now we need to return all the data from the teams data for 2015
+
+```{r}
+tbl(con,"Teams") %>% filter(yearID == 2015)
+
+```
+
+And again but the hard way
+
+```{r}
+tbl(con, sql(
+  "SELECT `Teams`.*
+FROM `Teams`
+WHERE (`yearID` = 2015.0)"
+))
+```
+
+Now we're gonna grab all the players from the hall fame, the year they were voted in, and their category. I went ahead and filtered inducted to yes, since once they're inducted they should no longer appear in the dataset.
+
+```{r}
+tbl(con, "HallOfFame") %>% filter(inducted == "Y")%>% select(c(playerID,category,yearID))
+```
+
+I wanna grab the names_First and names_Last variable and add it to the output above. This comes from the people dataset.
+
+```{r}
+peeps<- as.data.frame(tbl(con, "People") %>% select(playerID, nameFirst, nameLast))
+HOF<- as.data.frame(tbl(con, "HallOfFame") %>% filter(inducted == "Y")%>% select(c(playerID,category,yearID)))
+HOF_named<- merge(HOF, peeps, by = "playerID")
+HOF_named
+```
+
+Okay, this one is a lot. We're gonna grab some columns from the managers table, and use those columns to determine their overall win/loss ratios. We're gonna then sort from winningnest to losingest. (I know those aren't words but this isn't English class)
+
+```{r}
+tbl(con, "Managers") |>
+select(c(playerID,G,W,L)) |>
+group_by(playerID) |>
+summarize(G_managed = sum(G, na.rm = TRUE),
+Total_W = sum(W, na.rm = TRUE),
+Total_L = sum(L, na.rm = TRUE)) %>% collect() %>% mutate(Total_WG_managed = Total_W / G_managed) %>% arrange(desc(Total_WG_managed))
+```
+
+For this last part I'm going to merge by player id and let R discard everyone who isn't in both datasets.
+
+```{r}
+winning_managers<- as.data.frame(tbl(con, "Managers") |>
+select(c(playerID,G,W,L)) |>
+group_by(playerID) |>
+summarize(G_managed = sum(G, na.rm = TRUE),
+Total_W = sum(W, na.rm = TRUE),
+Total_L = sum(L, na.rm = TRUE)) %>% collect() %>% mutate(Total_WG_managed = Total_W / G_managed) %>% arrange(desc(Total_WG_managed)))
+winning_HOF<- merge(HOF_named, winning_managers, by = "playerID")
+winning_HOF
+```
+
+All Done!
